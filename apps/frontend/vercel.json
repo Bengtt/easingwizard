@@ -1,4 +1,6 @@
 {
+  "framework": "react-router",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "buildCommand": "cd ../.. && pnpm build:frontend"
+  "buildCommand": "cd ../.. && pnpm build:frontend",
+  "outputDirectory": "build"
 }
