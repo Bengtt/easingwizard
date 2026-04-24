@@ -71,3 +71,51 @@ export function verifyAndStrip(raw: string): string | null {
 
   return crcCalc === crcSeen ? code : null; // null ⇒ Link korrupt
 }
+
+/**
+ * Encodes keyframes text data to a base64 string for inclusion in share URLs.
+ * The keyframes text is stored separately from the compact state encoding
+ * because it can contain arbitrary CSS strings.
+ */
+export function encodeKeyframesData(keyframesCSS: string, animationPropertyValue: string): string {
+  const json = JSON.stringify({ k: keyframesCSS, a: animationPropertyValue });
+  // Use TextEncoder for reliable Unicode support instead of the deprecated unescape/escape pattern.
+  // Process bytes in chunks to avoid stack overflow when spreading large Uint8Arrays into
+  // String.fromCharCode (V8 limits function argument count, typically around 65k).
+  const bytes = new TextEncoder().encode(json);
+  const CHUNK = 8192;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Decodes keyframes text data from a base64 string produced by encodeKeyframesData.
+ * Returns null if the encoded string is invalid or malformed.
+ */
+export function decodeKeyframesData(encoded: string): { keyframesCSS: string; animationPropertyValue: string } | null {
+  try {
+    // Use TextDecoder for reliable Unicode support instead of the deprecated escape pattern
+    const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
+    const parsed: unknown = JSON.parse(json);
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      'k' in parsed &&
+      'a' in parsed &&
+      typeof (parsed as Record<string, unknown>).k === 'string' &&
+      typeof (parsed as Record<string, unknown>).a === 'string'
+    ) {
+      return {
+        keyframesCSS: (parsed as Record<string, string>).k,
+        animationPropertyValue: (parsed as Record<string, string>).a,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

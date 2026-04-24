@@ -1,6 +1,7 @@
-import { decodeState, EasingType, rehydrateShareState, rehydrateShareStateLegacy } from 'easingwizard-core';
+import { decodeState, decodeKeyframesData, EasingType, rehydrateShareState, rehydrateShareStateLegacy } from 'easingwizard-core';
 import { useEffect, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
+import AnimationCreator from '~/components/AnimationCreator';
 import BezierEditor from '~/components/BezierEditor';
 import BounceEditor from '~/components/BounceEditor';
 import Card from '~/components/Card';
@@ -50,8 +51,24 @@ export default function Index() {
       } else if (hash && hash.length > 1) {
         // V0
         // in new sharing mode, we use fragment with a minified code, like #a1b2c3d4e5
-        const decodedState = decodeState(hash.slice(1));
+        // The fragment may contain a "|"-separated keyframes payload: #<state>|<base64keyframes>
+        const rawFragment = hash.slice(1);
+        const pipeIndex = rawFragment.indexOf('|');
+        const encodedState = pipeIndex >= 0 ? rawFragment.slice(0, pipeIndex) : rawFragment;
+        const encodedKeyframes = pipeIndex >= 0 ? rawFragment.slice(pipeIndex + 1) : '';
+
+        const decodedState = decodeState(encodedState);
         const rehydratedState = rehydrateShareState(decodedState);
+
+        // Restore keyframes text payload if present
+        if (encodedKeyframes) {
+          const keyframesData = decodeKeyframesData(encodedKeyframes);
+          if (keyframesData) {
+            rehydratedState.keyframesCSS = keyframesData.keyframesCSS;
+            rehydratedState.animationPropertyValue = keyframesData.animationPropertyValue;
+          }
+        }
+
         setState(rehydratedState);
         didRestoreFromShareLink = true;
       }
@@ -66,6 +83,22 @@ export default function Index() {
         if (saved) {
           const decoded = decodeState(saved);
           const rehydrated = rehydrateShareState(decoded);
+
+          // Also restore keyframes text which is stored in a separate key
+          try {
+            const savedKeyframes = localStorage.getItem('easingKeyframes');
+            if (savedKeyframes) {
+              const parsed: unknown = JSON.parse(savedKeyframes);
+              if (parsed !== null && typeof parsed === 'object') {
+                const obj = parsed as Record<string, unknown>;
+                if (typeof obj.k === 'string') rehydrated.keyframesCSS = obj.k;
+                if (typeof obj.a === 'string') rehydrated.animationPropertyValue = obj.a;
+              }
+            }
+          } catch {
+            // Ignore malformed keyframes storage
+          }
+
           setState(rehydrated);
           setRestoredFromStorage(true);
         }
@@ -103,9 +136,17 @@ export default function Index() {
           'gap-4 xl:gap-8',
         )}
       >
-        <Card className="col-span-6 px-6 py-5 [--animation-delay:0.5s] lg:col-span-2">
-          <EasingSelection />
-        </Card>
+        {/* ── Left column: Presets (collapsible) + Animation Creator ─────── */}
+        <div className="col-span-6 flex flex-col gap-4 xl:gap-8 lg:col-span-2">
+          <Card className="px-6 py-5 [--animation-delay:0.5s]">
+            <EasingSelection />
+          </Card>
+          <Card className="px-6 py-5 [--animation-delay:0.5s]">
+            <AnimationCreator />
+          </Card>
+        </div>
+
+        {/* ── Middle column: Customize editor ──────────────────────────── */}
         <Card className="col-span-6 py-5 [--animation-delay:0.5s] sm:col-span-3 lg:col-span-2">
           <CardHeadline className="mx-6">Customize</CardHeadline>
           {easingType === EasingType.BEZIER && <BezierEditor />}
@@ -114,9 +155,13 @@ export default function Index() {
           {easingType === EasingType.BOUNCE && <BounceEditor />}
           {easingType === EasingType.WIGGLE && <WiggleEditor />}
         </Card>
+
+        {/* ── Right column: Preview ─────────────────────────────────────── */}
         <Card className="col-span-6 py-5 [--animation-delay:0.5s] sm:col-span-3 lg:col-span-2">
           <EasingPreview />
         </Card>
+
+        {/* ── Bottom row: Code + Share ──────────────────────────────────── */}
         <Card className="col-span-6 px-6 py-5 [--animation-delay:0.5s] lg:col-span-4">
           <CardHeadline>Code</CardHeadline>
           <EasingCode />

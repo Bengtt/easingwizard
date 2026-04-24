@@ -9,6 +9,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { classNames } from '~/css/class-names';
 import { useEasingStore } from '~/state/easing-store';
+import { swapKeyframesAnimationType } from '~/utils/keyframes-transform';
 import CardHeadline from './CardHeadline';
 import EasingPreviewElement from './EasingPreviewElement';
 import IconButton from './IconButton';
@@ -104,6 +105,8 @@ export default function EasingPreview() {
   const [counter, setCounter] = useState(0);
   const [hidePreviewElement, setHidePreviewElement] = useState(false);
   const [previewHasRestarted, setPreviewHasRestarted] = useState(false);
+  const keyframesEnabled = useEasingStore((state) => state.keyframesEnabled);
+  const keyframesCSS = useEasingStore((state) => state.keyframesCSS);
 
   useEffect(() => {
     // hide preview during duration change
@@ -137,8 +140,8 @@ export default function EasingPreview() {
         <div className="flex justify-between">
           <IconButton
             label="Show Linear Comparison"
-            disabled={!allowPreviewShowLinear}
-            isActive={previewShowLinear && allowPreviewShowLinear}
+            disabled={!allowPreviewShowLinear || keyframesEnabled}
+            isActive={previewShowLinear && allowPreviewShowLinear && !keyframesEnabled}
             onClick={() => setState({ previewShowLinear: !previewShowLinear })}
             position="left"
           >
@@ -191,13 +194,22 @@ export default function EasingPreview() {
               label={humanize(type)}
               isActive={previewAnimationType === type}
               onClick={() => {
-                if (type !== previewAnimationType) {
+                const isChanging = type !== previewAnimationType;
+                if (isChanging) {
                   setCounter(0);
                 }
-                if (type === previewAnimationType && previewPlayMode === PreviewPlayMode.ONCE) {
+                if (!isChanging && previewPlayMode === PreviewPlayMode.ONCE) {
                   setCounter((prev) => prev + 1);
                 }
-                setState({ previewAnimationType: type });
+
+                if (keyframesEnabled && isChanging) {
+                  // Swap the animated CSS property in the keyframes while
+                  // keeping all numerical values intact.
+                  const newCSS = swapKeyframesAnimationType(keyframesCSS, type);
+                  setState({ previewAnimationType: type, keyframesCSS: newCSS });
+                } else {
+                  setState({ previewAnimationType: type });
+                }
               }}
             >
               {icons[type]}

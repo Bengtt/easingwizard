@@ -117,6 +117,7 @@ export const useEasingStore = create<EasingState & EasingAction>((set, get) => (
 }));
 
 // Debounced persist to localStorage
+const KEYFRAMES_LOCALSTORAGE_KEY = 'easingKeyframes';
 let saveTimeout: ReturnType<typeof setTimeout> | undefined;
 useEasingStore.subscribe((state) => {
   clearTimeout(saveTimeout);
@@ -129,6 +130,15 @@ useEasingStore.subscribe((state) => {
         localStorage.setItem(LOCALSTORAGE_KEY, encoded);
       } else {
         localStorage.removeItem(LOCALSTORAGE_KEY);
+      }
+
+      // Persist keyframes text separately because the compact encoder only handles numbers.
+      // Only save when both fields are non-empty strings to avoid partial/inconsistent state.
+      if (typeof rest.keyframesCSS === 'string' && typeof rest.animationPropertyValue === 'string') {
+        localStorage.setItem(
+          KEYFRAMES_LOCALSTORAGE_KEY,
+          JSON.stringify({ k: rest.keyframesCSS, a: rest.animationPropertyValue }),
+        );
       }
     } catch {
       // Silently ignore localStorage errors (e.g. private browsing)
